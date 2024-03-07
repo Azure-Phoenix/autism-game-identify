@@ -168,10 +168,10 @@ const audio = new THREE.Audio(audioListener)
 
 // Game parameters
 let cursor
-let level = 2 // Number of cards
-let step = 1 // 3 times of interaction for each card
+let level = 1 // Number of cards
 let subLevel = 1 // Different cards for each level
 let autoPass = 0
+let promptLimit = 0
 let cardPosition = []
 let targetObject
 let cardPositions = [
@@ -189,7 +189,11 @@ let isUserMode = false
  */
 let assets = ["Dentist", "Doctor", "Nurse"]
 // Audios
-const audios = [`audios/${assets[0]}.mp3`, `audios/${assets[1]}.mp3`, `audios/${assets[2]}.mp3`]
+const audios = [
+  `audios/${assets[0]}.mp3`,
+  `audios/${assets[1]}.mp3`,
+  `audios/${assets[2]}.mp3`,
+]
 console.log(audios)
 
 // Prompt
@@ -251,9 +255,11 @@ let cards = [card_1, card_2, card_3]
  * Sequence
  */
 function sequence() {
+  isPickAvailable = true
   if (level == 1) {
     if (isUserMode) {
-      userInteraction()
+      scene.add(cards[subLevel - 1])
+      showPrompt()
     } else {
       randCard()
       cards[subLevel - 1].position.set(...cardPosition[0])
@@ -277,10 +283,11 @@ function sequence() {
     showPrompt()
   } else if (level == 3) {
     randCard()
-    console.log(subLevel)
     cards[subLevel - 1].position.set(...cardPosition[0])
     cards[subLevel % 3].position.set(...cardPosition[1])
     cards[(subLevel + 1) % 3].position.set(...cardPosition[2])
+    cursor.visible = false
+    showPrompt()
     playSound(audios[subLevel - 1])
     scene.add(cards[subLevel - 1])
     scene.add(cards[subLevel % 3])
@@ -291,21 +298,13 @@ function sequence() {
 /**
  * Functioins
  */
-function userInteraction() {
-  if (step != 1) {
-    randCard()
-    cards[subLevel - 1].position.set(...cardPosition[0])
-  }
-  scene.add(cards[subLevel - 1])
-  showPrompt()
-}
-
 function randCard() {
   let tempCardPositions = cardPositions
   cardPosition = tempCardPositions.sort(() => 0.5 - Math.random())
 }
 
 function showPrompt() {
+  if (level != 1) playSound(audios[subLevel - 1])
   isPickAvailable = true
   cursor.position.set(...cardPosition[0])
   cursor.scale.set(1, 1, 1)
@@ -317,15 +316,28 @@ function showPrompt() {
         x: 0.7,
         y: 0.7,
         z: 0.7,
-        duration: 0.7,
-        repeat: 9,
+        duration: 0.5,
+        repeat: 5,
         yoyo: true,
         ease: "linear",
         onComplete: () => {
           hidePrompt()
-          autoPass++
-          if (autoPass === 3) location.reload()
-          autoInteraction()
+          let tempSublevel = subLevel
+          let tempLevel = level
+          setTimeout(() => {
+            if (tempLevel == level && tempSublevel == subLevel) {
+              promptLimit++
+              if (autoPass == 1 && promptLimit == 1) {
+                location.reload()
+              }
+              if (promptLimit == 3) {
+                promptLimit = 0
+                autoInteraction()
+              } else {
+                showPrompt()
+              }
+            }
+          }, 4000)
         },
       })
     },
@@ -345,22 +357,16 @@ function hidePrompt() {
 }
 
 function autoInteraction() {
+  autoPass++
   isPickAvailable = false
   hidePrompt()
   for (let i = 0; i < 3; i++) scene.remove(cards[i])
-  step++
-  if (step == 4) {
-    step = 1
-    isUserMode = false
-    subLevel++
-    if (subLevel == 4) {
-      subLevel = 1
-      level++
-      if (level == 4) location.reload()
-      else if (level == 3) {
-        subLevel = Math.floor(Math.random() * 3) + 1
-      }
-    }
+  isUserMode = false
+  subLevel++
+  if (subLevel == 4) {
+    subLevel = 1
+    level++
+    if (level == 4) location.reload()
   }
   setTimeout(() => {
     sequence()
@@ -400,29 +406,21 @@ window.addEventListener("mousedown", (event) => {
 
   if (intersects.length > 0) {
     targetObject = intersects[0].object
-    console.log("aaa", targetObject)
-    console.log("bbb", cards[subLevel - 1])
     if (isPickAvailable) {
       if (targetObject === cards[subLevel - 1]) {
+        autoPass = 0
+        promptLimit = 0
         confetti()
-        if (level == 3) location.reload()
         isPickAvailable = false
         hidePrompt()
         playSound(audios[subLevel - 1])
         for (let i = 0; i < 3; i++) scene.remove(cards[i])
-        step++
-        if (step == 4) {
-          step = 1
-          isUserMode = false
-          subLevel++
-          if (subLevel == 4) {
-            subLevel = 1
-            level++
-            if (level == 3) {
-              isPickAvailable = true
-              subLevel = Math.floor(Math.random() * 3) + 1
-            }
-          }
+        isUserMode = false
+        subLevel++
+        if (subLevel == 4) {
+          subLevel = 1
+          level++
+          if (level == 4) location.reload()
         }
         setTimeout(() => {
           sequence()
