@@ -93,6 +93,54 @@ let raycaster = new THREE.Raycaster()
  ******************************
  */
 
+/**
+ * Definitions
+ */
+// Confetti
+const jsConfetti = new JSConfetti()
+
+// Audio
+const audioLoader = new THREE.AudioLoader()
+const audioListener = new THREE.AudioListener()
+const audio = new THREE.Audio(audioListener)
+
+// Game parameters
+let step = 1
+let gameStarted = false
+let cursor
+let level = 1 // Number of cards
+let subLevel = 1 // Different cards for each level
+let autoPass = 0
+let promptLimit = 0
+let cardPosition = []
+let targetObject
+let cardPositions = [
+  [-cameraWidth / 2, cameraHeight / 2, 0],
+  [cameraWidth / 2, -cameraHeight / 2, 0],
+  [cameraWidth / 2, cameraHeight / 2, 0],
+  [-cameraWidth / 2, -cameraHeight / 2, 0],
+]
+let mouse = new THREE.Vector2()
+let isPickAvailable = false
+let isUserMode = false
+
+// Metrics Parameters
+let metricsData = {}
+let finishType = "Success"
+let tags = []
+let responseTime = 0
+let responseTimes = []
+let tempResponseTime = 0
+let interactPositions = []
+let finishResponseInterval = false
+let responses = []
+let scores = [100]
+let gameScore = 0
+let gameDuration = 0
+let successInterection = 0
+let totalInteraction = 0
+let perStepPecentage = 1 / 9
+
 // Loading Progress Bar
 manager.onProgress = function (url, itemsLoaded, itemsTotal) {
   document.querySelector(".progressbar").style.width =
@@ -121,6 +169,10 @@ manager.onProgress = function (url, itemsLoaded, itemsTotal) {
             document.querySelector(".progress").remove()
             document.querySelector("#blocker").remove()
             setTimeout(() => {
+              gameStarted = true
+              setInterval(() => {
+                gameDuration++
+              }, 1000)
               sequence()
             }, 500)
           },
@@ -146,6 +198,10 @@ manager.onProgress = function (url, itemsLoaded, itemsTotal) {
             document.querySelector(".progress").remove()
             document.querySelector("#blocker").remove()
             setTimeout(() => {
+              gameStarted = true
+              setInterval(() => {
+                gameDuration++
+              }, 1000)
               sequence()
             }, 500)
           },
@@ -154,35 +210,6 @@ manager.onProgress = function (url, itemsLoaded, itemsTotal) {
     })
   }
 }
-
-/**
- * Definitions
- */
-// Confetti
-const jsConfetti = new JSConfetti()
-
-// Audio
-const audioLoader = new THREE.AudioLoader()
-const audioListener = new THREE.AudioListener()
-const audio = new THREE.Audio(audioListener)
-
-// Game parameters
-let cursor
-let level = 1 // Number of cards
-let subLevel = 1 // Different cards for each level
-let autoPass = 0
-let promptLimit = 0
-let cardPosition = []
-let targetObject
-let cardPositions = [
-  [-cameraWidth / 2, cameraHeight / 2, 0],
-  [cameraWidth / 2, -cameraHeight / 2, 0],
-  [cameraWidth / 2, cameraHeight / 2, 0],
-  [-cameraWidth / 2, -cameraHeight / 2, 0],
-]
-let mouse = new THREE.Vector2()
-let isPickAvailable = false
-let isUserMode = false
 
 /**
  * Assets
@@ -255,7 +282,6 @@ let cards = [card_1, card_2, card_3]
  * Sequence
  */
 function sequence() {
-  isPickAvailable = true
   if (level == 1) {
     if (isUserMode) {
       scene.add(cards[subLevel - 1])
@@ -304,6 +330,18 @@ function randCard() {
 }
 
 function showPrompt() {
+  responseTimes[step - 1] = 0
+  let calcResponseTime = setInterval(() => {
+    if (finishResponseInterval == true) {
+      clearInterval(calcResponseTime)
+      finishResponseInterval = false
+    } else {
+      tempResponseTime++
+      responseTimes[step - 1] = tempResponseTime
+    }
+  }, 1000)
+
+  isPickAvailable = true
   if (level != 1) playSound(audios[subLevel - 1])
   isPickAvailable = true
   cursor.position.set(...cardPosition[0])
@@ -357,6 +395,10 @@ function hidePrompt() {
 }
 
 function autoInteraction() {
+  tempResponseTime = 0
+  finishResponseInterval = true
+  scores[scores.length - 1] = 100
+  scores.push(100)
   autoPass++
   isPickAvailable = false
   hidePrompt()
@@ -366,7 +408,11 @@ function autoInteraction() {
   if (subLevel == 4) {
     subLevel = 1
     level++
-    if (level == 4) location.reload()
+    if (level == 4) {
+      exportMetrics()
+      finishType = "TimeOut"
+      location.reload()
+    }
   }
   setTimeout(() => {
     sequence()
@@ -381,6 +427,41 @@ function playSound(audioFile) {
     audio.setVolume(0.5)
     audio.play()
   })
+}
+
+function exportMetrics() {
+  for (let i = 0; i < responseTimes.length; i++) {
+    if (scores[i] != 100) {
+      responseTime += responseTimes[i]
+      responses.push({
+        respondedAt: responseTimes[i],
+        score: scores[i] + 20,
+        tag: tags[i],
+      })
+    }
+  }
+
+  metricsData = {
+    iterationType: "ANIMATION_GAME",
+    input: {
+      event: "Segment Ended",
+      message: finishType,
+    },
+    responseTime: responseTime,
+    //responseStatus: responseStatus,
+    coordinates: interactPositions,
+    response: responses,
+    attemptCount: 0,
+    tag: "Animation_Game",
+    durartionInSec: gameDuration,
+    score: gameScore * 100,
+    assetDuration: gameDuration,
+    successInteractions: successInterection,
+    totalInteractions: totalInteraction - 1,
+  }
+
+  window.parent.postMessage(JSON.stringify(metricsData), "*")
+  console.log("JSON DATA@Success: " + JSON.stringify(metricsData))
 }
 
 function confetti() {
@@ -399,8 +480,16 @@ function confetti() {
  * Events
  */
 window.addEventListener("mousedown", (event) => {
+  totalInteraction++
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+
+  if (gameStarted) {
+    scores[scores.length - 1] -= 20
+    scores[scores.length - 1] = Math.max(0, scores[scores.length - 1])
+
+    interactPositions.push({ x: mouse.x, y: mouse.y })
+  }
 
   raycaster.setFromCamera(mouse, camera)
   const intersects = raycaster.intersectObjects(scene.children, true)
@@ -409,9 +498,17 @@ window.addEventListener("mousedown", (event) => {
     targetObject = intersects[0].object
     if (isPickAvailable) {
       if (targetObject === cards[subLevel - 1]) {
+        tempResponseTime = 0
+        finishResponseInterval = true
+        step++
+        console.log(step)
+        gameScore += perStepPecentage * (1 / ((100 - scores[scores.length - 1]) / 20))
+        scores.push(100)
+        successInterection++
         autoPass = 0
         promptLimit = 0
         confetti()
+        tags.push(assets[subLevel - 1])
         isPickAvailable = false
         hidePrompt()
         playSound(audios[subLevel - 1])
@@ -422,9 +519,11 @@ window.addEventListener("mousedown", (event) => {
           subLevel = 1
           level++
           if (level == 4) {
+            exportMetrics()
             setTimeout(() => {
+              finishType = "Success"
               location.reload()
-            }, 4000);
+            }, 4000)
           }
         }
         setTimeout(() => {
