@@ -270,7 +270,7 @@ function sequence() {
         isUserMode = true
         setTimeout(() => {
           sequence()
-        }, 2000)
+        }, 3000)
       }, 5000)
     }
   } else if (level == 2) {
@@ -370,10 +370,11 @@ function autoInteraction() {
   }
   setTimeout(() => {
     sequence()
-  }, 2000)
+  }, 3000)
 }
 
 function playSound(audioFile) {
+  audio.stop()
   audioLoader.load(audioFile, (buffer) => {
     audio.setBuffer(buffer)
     audio.setLoop(false)
@@ -420,11 +421,15 @@ window.addEventListener("mousedown", (event) => {
         if (subLevel == 4) {
           subLevel = 1
           level++
-          if (level == 4) location.reload()
+          if (level == 4) {
+            setTimeout(() => {
+              location.reload()
+            }, 4000);
+          }
         }
         setTimeout(() => {
           sequence()
-        }, 2000)
+        }, 3000)
       }
     }
   }
